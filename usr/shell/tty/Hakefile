@@ -1,0 +1,7 @@
+[ build library {
+        target = "tty",
+  	    cFiles = [ "tty.c", "readline.c" ],
+        addLibraries = [ "mm", "sys", "c", "shell_session", "shell_containers" ],
+        architectures = allArchitectures
+    }
+]

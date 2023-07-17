@@ -1,0 +1,7 @@
+[ build library {
+        target = "iox",
+  	    cFiles = [ "iox.c" ],
+        addLibraries = [ "mm", "sys", "c" ],
+        architectures = allArchitectures
+    }
+]

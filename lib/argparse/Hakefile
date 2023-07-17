@@ -1,0 +1,4 @@
+[ build library { target = "argparse",
+                  cFiles = [ "argparse.c" ]
+                }
+]

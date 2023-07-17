@@ -1,0 +1,36 @@
+--------------------------------------------------------------------------
+-- Copyright (c) 2007-2010, ETH Zurich.
+-- All rights reserved.
+--
+-- This file is distributed under the terms in the attached LICENSE file.
+-- If you do not find this file, copies can be found by writing to:
+-- ETH Zurich D-INFK, Universitaetstrasse 6, CH-8092 Zurich. Attn: Systems Group.
+--
+-- Hakefile for /usr/init
+--
+--------------------------------------------------------------------------
+
+[ build application { target = "init",
+                      cFiles = [
+                        "distops/caplock.c",
+                        "distops/capqueue.c",
+                        "distops/deletestep.c",
+                        "distops/invocations.c",
+                        "main.c",
+                        "mem_alloc.c",
+                        "network_handler.c",
+                        "proc_mgmt.c",
+                        "coreboot.c",
+                        "tests.c",
+                        "rpc_handler.c",
+                        "async_channel.c",
+                        "coreboot_utils.c",
+                        "cap_transfer.c",
+                        "distcap_handler.c"
+                      ],
+                      addLinkFlags = [ "-e _start_init"], -- this is only needed for init
+                      addLibraries = [ "mm", "getopt", "spawn", "serial",
+                        "grading", "fs", "netutil"],
+                      architectures = allArchitectures
+                    }
+]

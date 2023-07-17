@@ -1,0 +1,92 @@
+\chapter[Memory Allocator]{Memory Allocator \\ \Large \textnormal{Group Milestone}}
+
+
+\section{Introduction}
+
+At their core, operating systems manage and allocate system resources, and memory is one of the most vital resources in any computing environment. A memory allocator is responsible for dynamically distributing and reclaiming memory to meet the needs of running processes and applications.
+
+Efficient memory allocation is essential for several reasons. First and foremost, it allows for optimal utilization of the limited memory resources available on a system. By allocating memory dynamically, an operating system can assign memory to processes as needed, ensuring that each process receives an appropriate amount of memory while avoiding unnecessary wastage. This ability to manage memory efficiently leads to improved overall system performance and responsiveness.
+
+In this chapter, we will discuss the design decisions and trade-offs we considered when designing the physical memory allocator for Barrelfish.
+
+\section{Design Overview}
+There are several important requirements which impacted the overall design of our memory allocator.
+
+First, in contrast to usual implementations of \texttt{malloc}, we are unable to store any metadata next to the memory which is being allocated. The RAM being allocated is more akin to an abstract resource (and may not be backed by memory at all, as is the case for memory-mapped devices). As we will discuss, this is mainly an issue for freeing memory: Instead of simply being able to look up the required about predecessor and successor blocks at an offset of the freed address, a data structure must be traversed to find predecessor and successor blocks. 
+
+Second, the RAM being managed is not contiguous. At initialization time, an arbitrary number of RAM capabilities may be added to the memory allocator for management. As a consequence, the allocator must handle discontinuities. Furthermore, as each region is associated to a separate capability, these different capabilities must also be stored in a reasonable way.
+
+In light of these constraints, we decided to represent the avaiable memory space as a set of regions, each of which keeps track of a separate list of free blocks. When a new RAM capability is added to the allocator for management, a new region is appended to the list of regions, with an initial block covering the entire region. Future allocations and deallocatations may then modify 
+
+\section{Allocation}
+The allocation procedure follows the general strategy of first-fit. As show in listing \ref{listing:findblock}, we use a double loop to find a free block. The outer loop iterates over the regions. In each region, we traverse the list of available blocks, and check if the allocation request can be serviced by the given block, conforming to the requested alignment.
+\begin{lstlisting}[caption={Finding a suitable block},label={listing:findblock}]
+    struct region_info* region = NULL;
+    struct block_info* prev = NULL;
+    struct block_info* curr = NULL;
+    for (
+        region = mm->region_head; 
+        region != NULL; 
+        region = region->next
+    ) {
+        prev = NULL;
+        for (
+            curr = region->free_head; 
+            curr != NULL; 
+            curr = curr->next
+        ) {
+            uintptr_t block_end = 
+                curr->block_addr + curr->block_size;
+            uintptr_t aligned_addr = 
+                ALIGN_TO(curr->block_addr, alignment);
+            if (aligned_addr <= block_end 
+                && base <= aligned_addr 
+                && aligned_addr <= limit
+            ) {
+                size_t real_size = block_end - aligned_addr;
+                if (real_size >= size) {
+                    goto done;
+                }
+            }
+            prev = curr;
+        }
+    }
+\end{lstlisting}
+
+After finding a suitable block, the free list of the region must also be updated. There are several cases of differing complexity:
+
+\begin{enumerate}
+    \item The allocation request fills the block exactly. In this case, the block is simply spliced out of the free list, and the slab space representing it is freed.
+    \item The allocation request is aligned with the beginning of the block, but the block is larger than the requested size. In this case, the start address of the block is simply updated to lie past the end of the allocation request.
+    \item The allocation request is not aligned with the beginning of the block, but reaches until the end of the block. This case may occur if the requested alignment is higher than the alignment of the block. In this case, the end address of the block is simply updated to lie at the aligned address at which the allocation is performed.
+    \item The allocation request is aligned with neither the beginning nor the end of the block. In this case, the allocation splits the original block in two. Hence, new slab space must be allocated and spliced into the free list.
+\end{enumerate}
+
+After updating the free list, all that remains is to create the capability which will be returned to the caller by retyping the region capability. This is simple in our design, as the capability for the region is stored in the region structure itself.
+
+\subsection{Extra Challenge: \texttt{mm\_alloc\_fixed\_aligned}}
+To support fixed allocation, we additionally check whether the aligned address within the block conforms to the requested limits, and only service the request if this is the case, as seen in lines 20 and 21 of listing \ref{listing:findblock}.
+
+\section{Deallocation}
+When deallocating a block of memory, we first need to find the region from which it was allocated, so that we can insert it into the correct free list\footnote{Blocks must always go into the correct free list because when allocating memory, the returned capabilities are the result of retyping the region capabilty}.
+The simplest deallocation procedure would simply append the block being deallocated into the free list of its corresponding region. While this would work, it would quickly lead to significant fragmentation, and is therefore not practical.
+To avoid fragmentation, we attempt to fuse the block being deallocated with its direct predecessor and successor (if they exist). We achieve this through the following procedure:
+\begin{enumerate}
+    \item Find the predecessor and successor in the (sorted) free list of the corresponding region.
+    \item If the predecessor exists and directly precedes the block being freed, simply extend the predecessor forward by the size of the freed block.
+    \item If the successor exists and directly succeeds the block being freed \textit{and} no fusion was performed in step 2, extend the successor backwards to the beginning of the block being freed.
+    \item If the successor exists and directly succeeds the fused block of step 2, deallocate the slab representing the successor and extend the fused block to cover the entire range.
+\end{enumerate}
+
+\subsection{Extra Challenge: Partial Freeing of Memory}
+Because our design only stores free blocks and does \textit{not} store blocks which are in use, we support partial deallocations without any additional effort. In fact, our system cannot tell the difference between partial and full deallocations at all, and does not need to.
+
+\section{Managing Slab Space}
+Because the RAM allocator internally uses a slab allocator for allocating memory for its data structures, and the slab allocator is in turn refilled by the RAM allocator, it is necessary to ensure that there are always enough free slabs to handle a RAM allocation request, to avoid going into a mutually recursive loop. For this purpose, at the end of every function which allocates slabs using the slab allocator, an additional check is inserted to ensure that enough slab slots are available, and a refill is triggered otherwise. As we found out, it is important to perform this refill \textit{after} the main logic of the function allocating the slabs, to ensure correctness: Otherwise the refill may occurr while certain invariants are violated, and, as the refill calls the respective RAM allocation functions itself, chaos may ensue.
+
+
+\section{Retrospective}
+For any component as fundamental to a system as a memory allocator, the most important criterion should be reliability. In this regard, our memory allocator has served us well.
+While implementing the subsequent components of our operating system, we didn't run into a single correctness issue with our memory allocator.
+
+This, however, does not mean that the design is perfect. We have observed that the system becomes noticeably slower after running programs multiple times. This is especially noticeable when running our test suite, which performs a large number of RAM allocations and deallocations. This is likely because performing a large number of allocations also requires providing more memory to the slab allocator, which obtains pages which are interspersed with the application pages. When the allocated pages are then deallocated, the slab allocator does not release any memory, and the available memory is left fragmented. This means that the free list is longer, which increases the latency of allocation and deallocation requests.

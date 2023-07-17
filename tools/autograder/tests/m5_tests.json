@@ -1,0 +1,47 @@
+{
+    "title" : "Multicore Tests (M5)",
+    "tests" : {
+        "C1" : {
+            "title" :  "Multicore: Basic Boot",
+            "logfile" : "m5_tests.log",
+            "base_modules" : true,
+            "modules" : [
+                ["armv8/sbin/init", "t:m5:c2"],
+                ["armv8/sbin/alloc"]
+             ],
+            "teststeps" : [
+                {
+                    "action" : "expect",
+                    "pass" : ["Barrelfish CPU driver starting on ARMv8 \\(APP\\) mpid=0:0:0:1"],
+                    "fail" : [ ]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> Grading setup on core 1"],
+                    "fail" : []
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> spawn_one_without_args\\(alloc, 1\\)"],
+                    "fail" : []
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> alloc running on core 1"],
+                    "fail" : []
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> allocated 4096 bytes on core 1"],
+                    "fail" : ["<grading> TEST FAILED:  M1-1"]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> allocated 2097152 bytes on core 1"],
+                    "fail" : ["<grading> TEST FAILED:  M1-1"]
+                }
+            ],
+            "timeout" : 20
+        }
+    }
+}

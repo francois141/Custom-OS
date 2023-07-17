@@ -1,0 +1,106 @@
+{
+    "title" : "Physical Memory Manager Tests (M1)",
+    "tests" : {
+        "A1" : {
+            "title" :  "Memory Allocations",
+            "logfile" : "m1_test.log",
+            "base_modules" : true,
+            "modules" : [
+                ["armv8/sbin/init", "t:m1:a1"]
+            ],
+            "teststeps" : [
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> # TESTS: Milestone 1 \\(Physical Memory Management\\)"],
+                    "fail" : [ ]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> alloc_one\\(4096\\)"],
+                    "fail" : [ ]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> TEST PASSED:  A1-1"],
+                    "fail" : ["<grading> TEST FAILED:  A1-1"]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> alloc_many\\(512\\)"],
+                    "fail" : [ ]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> allocated 8"],
+                    "fail" : ["<grading> TEST FAILED:  A3-1"]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> allocated 16"],
+                    "fail" : ["<grading> TEST FAILED:  A3-1"]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> allocated 32"],
+                    "fail" : ["<grading> TEST FAILED:  A3-1"]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> allocated 128"],
+                    "fail" : ["<grading> TEST FAILED:  A3-1"]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> allocated 256"],
+                    "fail" : ["<grading> TEST FAILED:  A3-1"]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> allocated 512"],
+                    "fail" : ["<grading> TEST FAILED:  A3-1"]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> TEST PASSED:  A3-1"],
+                    "fail" : ["<grading> TEST FAILED:  A3-1"]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> alloc_and_map\\(\\)"],
+                    "fail" : [ ]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> allocated frame, trying to map it"],
+                    "fail" : ["<grading> TEST FAILED:  A4-1"]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> mapped frame, accessing it memset"],
+                    "fail" : ["<grading> TEST FAILED:  A4-1"]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> TEST PASSED:  A4-1"],
+                    "fail" : ["<grading> TEST FAILED:  A4-1"]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> free_one\\(4096\\)"],
+                    "fail" : [ ]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> TEST PASSED:  A2-1"],
+                    "fail" : ["<grading> TEST FAILED:  A2-1"]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> # DONE:  Milestone 1 \\(Physical Memory Management\\)"],
+                    "fail" : [ ]
+                }
+            ],
+            "timeout" : 30
+        }
+    }
+}

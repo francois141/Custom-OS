@@ -1,0 +1,10 @@
+ mnt /dev/sdc /mnt/media
+ sudo mount /dev/sdc /mnt/media
+
+sudo dd if=/dev/zero of=/dev/sdc seek=0    count=20000   bs=512
+sudo /usr/sbin/mkfs.vfat -I -F 32 -S 512 -s 8 /dev/sdc
+
+
+
+export PATH="$HOME/bin:$PATH"
+make usbboot_imx8x

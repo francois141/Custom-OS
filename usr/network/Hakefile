@@ -1,0 +1,6 @@
+[ build application { target = "network",
+  		              cFiles = [ "network.c" ],
+                    addLibraries = [ "grading_support", "mm", "devif_backend_virtio_net", "devif_backend_enet" ],
+                    architectures = allArchitectures
+                    }
+]

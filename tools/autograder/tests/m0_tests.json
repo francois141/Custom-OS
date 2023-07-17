@@ -1,0 +1,19 @@
+{
+    "title" : "AOS Tests for Milestone 0",
+    "tests" : {
+        "BasicBoot" : {
+            "title" :  "Compile and Boot",
+            "logfile" : "m0_test.log",
+            "base_modules" : true,
+            "modules" : [ ],
+            "teststeps" : [
+                {
+                    "action" : "expect",
+                    "pass" : ["<GRADING> init domain starting on core 0"],
+                    "fail" : []
+                }
+            ],
+            "timeout" : 20
+        }
+    }
+}

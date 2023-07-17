@@ -1,0 +1,7 @@
+[ build library {
+        target = "shell_session",
+  	    cFiles = [ "session.c" ],
+        addLibraries = [ "mm", "sys", "c", "shell_containers", "cmdparse", "pathutil" ],
+        architectures = allArchitectures
+    }
+]

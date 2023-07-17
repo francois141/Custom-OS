@@ -1,0 +1,45 @@
+--------------------------------------------------------------------------
+-- Copyright (c) 2022, The University of British Columbia.
+-- All rights reserved.
+--
+-- This file is distributed under the terms in the attached LICENSE file.
+-- If you do not find this file, copies can be found by writing to:
+-- ETH Zurich D-INFK, Universitaetstrasse 6, CH-8092 Zurich. Attn: Systems Group.
+--
+-- Hakefile for /usr/drivers/virtio-net virtio network driver
+--
+--------------------------------------------------------------------------
+
+
+[
+  build library {
+    target = "devif_backend_virtio_net",
+    cFiles = [
+      "virtio_net_queue.c",
+      "virtio_net_device.c"
+    ],
+    mackerelDevices = [
+      "virtio/virtio_mmio",
+      "virtio/virtio_net"
+    ],
+    addLibraries = libDeps ["devif_internal", "devif"]
+  },
+
+
+  build application {
+    target = "vnet",
+    cFiles = [
+      "driver.c"
+    ],
+    mackerelDevices = [
+      "virtio/virtio_mmio",
+      "virtio/virtio_net"
+    ],
+    addLibraries = libDeps [
+      "devif_backend_virtio_net",
+      "netutil",
+      "netstack"
+    ],
+    architectures = ["armv8"]
+  }
+]

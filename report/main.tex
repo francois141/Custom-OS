@@ -1,0 +1,92 @@
+\documentclass[10pt,a4paper,titlepage]{report}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{comment}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{authblk}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{xcolor}
+\usepackage{caption}
+\usepackage{url} 
+\usepackage{menukeys} 
+
+
+\newcommand{\source}[1]{\caption*{Source: {#1}} }
+
+
+\hypersetup{
+    colorlinks,
+    citecolor=blue,
+    filecolor=black,
+    linkcolor=black,
+    urlcolor=blue, % please don't change it xD
+    pdftitle={Report team 9},
+}
+
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+
+\lstdefinestyle{mystyle}{
+    language=c,
+    backgroundcolor=\color{backcolour},   
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{magenta},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                    
+    numbersep=5pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=2
+}
+
+\lstset{style=mystyle}
+
+% TODO: Replace the title with your own
+\title{Fin-Dows \\ \Large \textnormal{Why did the fish start using a computer? Because it wanted to scale up from swimming to surfing the web, but it couldn't decide between "Fin-Dows" and "Barrelfish"!}}
+
+
+\author[1]{\textbf{Group 009} \\ Jan Luca Scheerer}
+\author[2]{Marc Dufay}
+\author[3]{\\ Georgijs Vilums}
+\author[4]{François Costa}
+\affil[1]{\texttt{lscheerer@ethz.ch}}
+\affil[2]{\texttt{mdufay@student.ethz.ch}}
+\affil[3]{\texttt{gvilums@student.ethz.ch}}
+\affil[4]{\texttt{fcosta@ethz.ch}}
+
+\begin{document}
+
+\maketitle
+
+
+\tableofcontents
+
+\input{memory-allocation.tex}
+\input{self-paging.tex}
+\input{processes.tex}
+\input{rpc.tex}
+% \input{urpc.tex}
+\input{multicore.tex}
+
+\input{shell.tex}	
+\input{filesystem.tex}
+\input{networking.tex}
+\input{capabilities.tex} 
+\input{user_guide.tex}
+
+\end{document}

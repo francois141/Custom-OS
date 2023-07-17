@@ -1,0 +1,7 @@
+[ build library {
+        target = "cmdparse",
+  	    cFiles = [ "cmdparse.c", "cmdbuiltins.c" ],
+        addLibraries = [ "mm", "sys", "c", "shell_containers", "fs" ],
+        architectures = allArchitectures
+    }
+]

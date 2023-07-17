@@ -1,0 +1,13 @@
+[ build library {
+          target = "shell",
+    	  cFiles = [ "shell.c" ],
+          addLibraries = [ "mm", "sys", "c", "shell_session", "shell_containers", "tty"],
+          architectures = allArchitectures
+  },
+  build application {
+        target = "shell",
+  	    cFiles = [ "main.c" ],
+        addLibraries = [ "shell", "fs" ],
+        architectures = allArchitectures
+  }
+]

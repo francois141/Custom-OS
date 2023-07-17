@@ -1,0 +1,62 @@
+[
+  build library {
+        target = "builtin",
+        cFiles = [ "builtin.c" ],
+        addLibraries = [ "mm", "sys", "c", "fs", "shell_containers" ],
+        architectures = allArchitectures
+  },
+  build application {
+        target = "false",
+        cFiles = [ "false.c" ],
+        addLibraries = [ "mm", "sys", "c" ],
+        architectures = allArchitectures
+  },
+  build application {
+        target = "true",
+        cFiles = [ "true.c" ],
+        addLibraries = [ "mm", "sys", "c" ],
+        architectures = allArchitectures
+  },
+  build application {
+        target = "echo",
+  	    cFiles = [ "echo.c" ],
+        addLibraries = [ "mm", "sys", "c", "builtin" ],
+        architectures = allArchitectures
+  },
+  build application {
+        target = "ls",
+        cFiles = [ "ls.c" ],
+        addLibraries = [ "mm", "sys", "c", "builtin", "pathutil" ],
+        architectures = allArchitectures
+  },
+  build application {
+        target = "cat",
+        cFiles = [ "cat.c" ],
+        addLibraries = [ "mm", "sys", "c", "builtin", "pathutil" ],
+        architectures = allArchitectures
+  },
+  build application {
+        target = "tee",
+        cFiles = [ "tee.c" ],
+        addLibraries = [ "mm", "sys", "c", "builtin", "pathutil" ],
+        architectures = allArchitectures
+  },
+  build application {
+        target = "wc",
+        cFiles = [ "wc.c" ],
+        addLibraries = [ "mm", "sys", "c", "builtin", "pathutil" ],
+        architectures = allArchitectures
+  },
+  build application {
+        target = "listen",
+        cFiles = [ "listen.c" ],
+        addLibraries = [ "mm", "sys", "c", "builtin" ],
+        architectures = allArchitectures
+  },
+  build application {
+        target = "ping",
+        cFiles = [ "ping.c" ],
+        addLibraries = [ "mm", "sys", "c", "builtin" ],
+        architectures = allArchitectures
+  }
+]

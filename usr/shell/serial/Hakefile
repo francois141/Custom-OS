@@ -1,0 +1,13 @@
+[ build library {
+          target = "serial",
+      	  cFiles = [ "serial.c" ],
+          addLibraries = [ "mm", "sys", "c", "lpuart", "pl011", "gic_dist", "shell_containers" ],
+          architectures = allArchitectures
+  },
+  build application {
+          target = "serial_tester",
+      	  cFiles = [ "serial_tester.c" ],
+          addLibraries = [ "mm", "sys", "c" ],
+          architectures = allArchitectures
+  }
+]

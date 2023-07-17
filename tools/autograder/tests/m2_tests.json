@@ -1,0 +1,128 @@
+{
+    "title" : "Virtual Memory Subsystem Tests (M2)",
+    "tests" : {
+        "V1" : {
+            "title" :  "Page Mappings",
+            "logfile" : "m2_test.log",
+            "base_modules" : true,
+            "modules" : [
+                ["armv8/sbin/init", "t:m2:v1"]
+            ],
+            "teststeps" : [
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> # TESTS: Milestone 2 \\(Virtual Memory Management\\)"],
+                    "fail" : [ ]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> alloc_and_map_fixed\\(200000000000, 4096\\)"],
+                    "fail" : [ ]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> allocated frame, trying to map it at 200000000000"],
+                    "fail" : ["<grading> TEST FAILED:  V1-3"]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> mapped frame, checking for zeroes"],
+                    "fail" : ["<grading> TEST FAILED:  V1-3"]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> memset\\(0x200000000000, i, 5242880\\)"],
+                    "fail" : ["<grading> TEST FAILED:  V1-3"]
+                },
+
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> TEST PASSED:  V1-3 alloc_and_map_fixed"],
+                    "fail" : ["<grading> TEST FAILED:  V1-3"]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> alloc_and_map_one\\(5242880\\)"],
+                    "fail" : [ ]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> allocated frame, trying to map it"],
+                    "fail" : ["<grading> TEST FAILED:  V1-1"]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> mapped frame, checking for zeroes"],
+                    "fail" : ["<grading> TEST FAILED:  V1-1"]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> memset\\("],
+                    "fail" : ["<grading> TEST FAILED:  V1-1"]
+                },
+
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> TEST PASSED:  V1-1 alloc_and_map"],
+                    "fail" : ["<grading> TEST FAILED:  V1-1"]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> alloc_and_map_many\\(16\\)"],
+                    "fail" : [ ]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> allocated frame, trying to map it 16 times"],
+                    "fail" : ["<grading> TEST FAILED:  V1-2"]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> mapped frame 1, checking for zeroes"],
+                    "fail" : ["<grading> TEST FAILED:  V1-2"]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> mapped frame 2, checking for zeroes"],
+                    "fail" : ["<grading> TEST FAILED:  V1-2"]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> mapped frame 4, checking for zeroes"],
+                    "fail" : ["<grading> TEST FAILED:  V1-2"]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> mapped frame 8, checking for zeroes"],
+                    "fail" : ["<grading> TEST FAILED:  V1-2"]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> mapped frame 16, checking for zeroes"],
+                    "fail" : ["<grading> TEST FAILED:  V1-2"]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> TEST PASSED:  V1-2"],
+                    "fail" : ["<grading> TEST FAILED:  V1-2"]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> alloc_heap\\(268435456\\)"],
+                    "fail" : [ ]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> TEST PASSED:  V1-4"],
+                    "fail" : ["<grading> TEST FAILED:  V1-4"]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> # DONE:  Milestone 2 \\(Virtual Memory Management\\)"],
+                    "fail" : [ ]
+                }
+            ],
+            "timeout" : 30
+        }
+    }
+}

@@ -1,0 +1,149 @@
+{
+    "title" : "RPC Subsystem Tests (M4)",
+    "tests" : {
+        "R1" : {
+            "title" :  "Basic RPC",
+            "logfile" : "m4_tests.log",
+            "base_modules" : true,
+            "modules" : [
+                ["armv8/sbin/init", "t:m4:r1"],
+                ["armv8/sbin/rpcclient"],
+                ["armv8/sbin/hello"]
+            ],
+            "teststeps" : [
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> # TESTS: Milestone 4 \\(RPC\\)"],
+                    "fail" : []
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> rpcclient started..."],
+                    "fail" : []
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> test_basic_rpc\\(\\)"],
+                    "fail" : []
+                },
+
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> sending number 42."],
+                    "fail" : []
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> rpc-recv: Number 42 0x2a"],
+                    "fail" : ["<grading> TEST FAILED:  R1-1"]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> sending string 'hello init'"],
+                    "fail" : []
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> rpc-recv: string 10 158 'hello init'"],
+                    "fail" : ["<grading> TEST FAILED:  R1-1"]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> test_serial_rpc\\(\\)"],
+                    "fail" : []
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> rpc-recv: serial putchar h"],
+                    "fail" : ["<grading> TEST FAILED:  R1-2"]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> rpc-recv: serial putchar e"],
+                    "fail" : ["<grading> TEST FAILED:  R1-2"]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> rpc-recv: serial putchar h"],
+                    "fail" : ["<grading> TEST FAILED:  R1-2"]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> rpc-recv: serial putchar e"],
+                    "fail" : ["<grading> TEST FAILED:  R1-2"]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> test_memory_rpc\\(4096\\)"],
+                    "fail" : []
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> successful ram_alloc."],
+                    "fail" : ["<grading> TEST FAILED:  R1-3"]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> rpc-recv: ram alloc bytes=4096 alignment=4096"],
+                    "fail" : ["<grading> TEST FAILED:  R1-2"]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> get_ram_cap 0 / 10 successful"],
+                    "fail" : ["<grading> TEST FAILED:  R1-3"]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> rpc-recv: ram alloc bytes=4096 alignment=4096"],
+                    "fail" : ["<grading> TEST FAILED:  R1-2"]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> get_ram_cap 4 / 10 successful"],
+                    "fail" : ["<grading> TEST FAILED:  R1-3"]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> rpc-recv: ram alloc bytes=4096 alignment=4096"],
+                    "fail" : ["<grading> TEST FAILED:  R1-2"]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> get_ram_cap 9 / 10 successful"],
+                    "fail" : ["<grading> TEST FAILED:  R1-3"]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> test_spawn_rpc\\(hello arg1 arg2 arg3\\)"],
+                    "fail" : []
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> rpc-recv: process spawn cmdline=hello arg1 arg2 arg3 core=0"],
+                    "fail" : []
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> Hello, world! from userspace"],
+                    "fail" : ["<grading> TEST FAILED:  R1-4"]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> rpc-recv: process spawn cmdline=hello arg1 arg2 arg3 core=0"],
+                    "fail" : []
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> Hello, world! from userspace"],
+                    "fail" : ["<grading> TEST FAILED:  R1-4"]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> rpcclient done with tests."],
+                    "fail" : ["<grading> TEST FAILED:  R1-4"]
+                }
+            ],
+            "timeout" : 30
+        }
+    }
+}

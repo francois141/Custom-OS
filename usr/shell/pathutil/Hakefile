@@ -1,0 +1,7 @@
+[ build library {
+        target = "pathutil",
+  	    cFiles = [ "pathutil.c" ],
+        addLibraries = [ "mm", "sys", "c", "shell_containers" ],
+        architectures = allArchitectures
+    }
+]

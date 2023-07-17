@@ -1,0 +1,151 @@
+diff --git a/lib/aos/threads.c b/lib/aos/threads.c
+index dbbbf7b..9501b4f 100644
+--- a/lib/aos/threads.c
++++ b/lib/aos/threads.c
+@@ -1083,12 +1083,13 @@ static int bootstrap_thread(struct spawn_domain_params *params)
+     tls_block_total_len = params->tls_total_len;
+ 
+     // Initialize subsystems
+-    err = barrelfish_init_onthread(params);
++    /* err = barrelfish_init_onthread(params);
+     if (err_is_fail(err)) {
+         DEBUG_ERR(err, "error during libbarrelfish init");
+         exit(EXIT_FAILURE);
+         assert(!"exit returned!");
+-    }
++    } */
++    (void)err;
+ 
+     // Until we have self-paging, we cannot use the paging-region based thread
+     // control block slab allocator, so just run main thread directly
+diff --git a/usr/init/Hakefile b/usr/init/Hakefile
+index 5aa0605..191c5cc 100644
+--- a/usr/init/Hakefile
++++ b/usr/init/Hakefile
+@@ -19,7 +19,8 @@
+                         "main.c",
+                         "mem_alloc.c",
+                         "proc_mgmt.c",
+-                        "coreboot.c"
++                        "coreboot.c",
++                        "debug_demo.c"
+                       ],
+                       addLinkFlags = [ "-e _start_init"], -- this is only needed for init
+                       addLibraries = [ "mm", "getopt",
+diff --git a/usr/init/debug_demo.c b/usr/init/debug_demo.c
+new file mode 100644
+index 0000000..63b7fe0
+--- /dev/null
++++ b/usr/init/debug_demo.c
+@@ -0,0 +1,62 @@
++/**
++ * \file
++ * \brief Demo for debugging
++ */
++
++/*
++ * Copyright (c) 2016, ETH Zurich.
++ * All rights reserved.
++ *
++ * This file is distributed under the terms in the attached LICENSE file.
++ * If you do not find this file, copies can be found by writing to:
++ * ETH Zurich D-INFK, Stampfenbachstrasse 114, CH-8092 Zurich. Attn: Systems Group.
++ */
++
++#include <stdio.h>
++
++#include <aos/aos.h>
++#include <aos/heap.h>
++
++#include "debug_demo.h"
++
++struct node {
++    struct node *next;
++    uint64_t value;
++};
++
++#define DESC_LEN 16
++struct list {
++    char description[DESC_LEN];
++    struct node *head;
++    uint64_t sum;
++};
++
++int debug_demo(void)
++{
++    struct heap heap;
++    static char heap_buf[PAGE_SIZE];
++    heap_init(&heap, heap_buf, sizeof(heap_buf), NULL);
++
++    struct list *list = heap_alloc(&heap, sizeof(struct list));
++    list->head = NULL;
++    strcpy(list->description, "My super super super cool list");
++
++    for (int i = 0; i < 5; i++) {
++        struct node *node = heap_alloc(&heap, sizeof(struct node));
++        node->value = (i + 1) * 0x10000000000000ULL;
++        node->next = list->head;
++        list->head = node;
++    }
++
++    list->sum = 0;
++    for (struct node *node = list->head; node != NULL; node = node->next) {
++        list->sum += node->value;
++    }
++
++    printf("%.*s: [\n", DESC_LEN, list->description);
++    for (struct node *node = list->head; node != NULL; node = node->next) {
++        printf("\t%p:%"PRIx64"\n", node, node->value);
++    }
++    printf("], sums up to %"PRIx64"\n", list->sum);
++    return EXIT_SUCCESS;
++}
+diff --git a/usr/init/debug_demo.h b/usr/init/debug_demo.h
+new file mode 100644
+index 0000000..9265118
+--- /dev/null
++++ b/usr/init/debug_demo.h
+@@ -0,0 +1,20 @@
++/**
++ * \file
++ * \brief Demo for debugging
++ */
++
++/*
++ * Copyright (c) 2016, ETH Zurich.
++ * All rights reserved.
++ *
++ * This file is distributed under the terms in the attached LICENSE file.
++ * If you do not find this file, copies can be found by writing to:
++ * ETH Zurich D-INFK, Stampfenbachstrasse 114, CH-8092 Zurich. Attn: Systems Group.
++ */
++
++#ifndef _INIT_DEBUG_DEMO_H_
++#define _INIT_DEBUG_DEMO_H_
++
++int debug_demo(void);
++
++#endif /* _INIT_DEBUG_DEMO_H_ */
+diff --git a/usr/init/main.c b/usr/init/main.c
+index 2a870bc..27ddbab 100644
+--- a/usr/init/main.c
++++ b/usr/init/main.c
+@@ -26,7 +26,7 @@
+ 
+ #include "mem_alloc.h"
+ #include "coreboot.h"
+-
++#include "debug_demo.h"
+ 
+ 
+ 
+@@ -50,6 +50,9 @@ static int bsp_main(int argc, char *argv[])
+     bi = (struct bootinfo *)strtol(argv[1], NULL, 10);
+     assert(bi);
+ 
++    debug_demo();
++    exit(EXIT_SUCCESS);
++
+     // initialize our RAM allocator
+     err = initialize_ram_alloc(bi);
+     if (err_is_fail(err)) {

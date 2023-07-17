@@ -1,0 +1,93 @@
+{
+    "title" : "Process Management Tests (M3)",
+    "tests" : {
+        "P1" : {
+            "title" :  "Process Spawning and Listing",
+            "logfile" : "m3_test.log",
+            "base_modules" : true,
+            "modules" : [
+                ["armv8/sbin/init", "t:m3:p1"],
+                ["armv8/sbin/hello", "a0 a2"]
+            ],
+            "teststeps" : [
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> # TESTS: Milestone 3 \\(Process Management\\)"],
+                    "fail" : [ ]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> Hello, world! from userspace \\(1\\)"],
+                    "fail" : ["<grading> TEST FAILED:  P1-1" ]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> argv\\[0\\] = hello"],
+                    "fail" : ["<grading> TEST FAILED:  P1-1" ]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> Hello, world! from userspace \\(3\\)"],
+                    "fail" : ["<grading> TEST FAILED:  P1-2" ]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> argv\\[0\\] = hello"],
+                    "fail" : ["<grading> TEST FAILED:  P1-2" ]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> argv\\[1\\] = a0"],
+                    "fail" : ["<grading> TEST FAILED:  P1-2" ]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> argv\\[2\\] = a2"],
+                    "fail" : ["<grading> TEST FAILED:  P1-2" ]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> Hello, world! from userspace \\(4\\)"],
+                    "fail" : ["<grading> TEST FAILED:  P1-2" ]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> argv\\[0\\] = hello"],
+                    "fail" : ["<grading> TEST FAILED:  P1-2" ]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> argv\\[1\\] = arg1"],
+                    "fail" : ["<grading> TEST FAILED:  P1-2" ]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> argv\\[2\\] = arg2"],
+                    "fail" : ["<grading> TEST FAILED:  P1-2" ]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> argv\\[3\\] = arg3"],
+                    "fail" : ["<grading> TEST FAILED:  P1-2" ]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> spawn_list\\(\\)"],
+                    "fail" : [ ]
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["hello", "hello a0 a2", "hello arg1 arg2 arg3"],
+                    "fail" : ["<grading> TEST FAILED:  P1-4"],
+                    "repeat" : 3
+                },
+                {
+                    "action" : "expect",
+                    "pass" : ["# DONE:  Milestone 3 \\(Process Management\\)"],
+                    "fail" : [ ]
+                }
+            ],
+            "timeout" : 45
+        }
+    }
+}

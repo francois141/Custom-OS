@@ -1,0 +1,217 @@
+\chapter[Multi-core Support]{Multi-core Support \\ \Large \textnormal{Group Milestone}}
+
+
+\section{Introduction}
+
+\href{https://en.wikipedia.org/wiki/Multi-core_processor}{\texttt{Multicore processors}} are computer chips that have multiple independent \texttt{processing units}, called \texttt{cores}, on a single chip. Each core functions like a \texttt{separate processor}, capable of executing instructions and performing tasks. With multiple cores, a multicore processor can handle multiple tasks simultaneously, improving overall performance and efficiency. It's like having multiple workers in a team, each working on different tasks at the same time, making the work faster and more efficient. Multicore processors are standard in computer systems today.
+
+Our current operating system has the capability to run multiple programs, but it's limited to running them on a \texttt{single core}. To enhance its functionality and allow it to run programs \texttt{simultaneously} on \texttt{multiple cores}, we need to enable multicore processing. This involves \texttt{booting} a second core in the system.
+
+Once the second core is successfully booted, we face the challenge of managing the available physical memory between the two cores. Both cores need to have access to memory resources while avoiding conflicts or overlaps. Additionally, we need to establish a means of communication between the two cores to facilitate \texttt{coordination} and \texttt{data exchange}.
+
+\subsection{Steps required to boot the second code}
+
+\texttt{Barrelfish} is a \texttt{microkernel}. This implies that most of the work need to be done in \texttt{user space} to prepare the new CPU driver for booting. We need to allocate memory for various components and provide necessary information. This represents an overview of the essential steps.
+
+\begin{itemize}
+\item \textbf{Allocate Memory}: The new \texttt{CPU} driver requires memory for loading the boot driver, loading the CPU driver itself, a core data structure, a kernel stack, space for the init process, a URPC frame for cross-core communication channels, and a new KCB (kernel control block). We can allocate these as separate frames or in a contiguous block. To obtain a new KCB, we can retype a RAM cap into a KCB and initialize the \texttt{armv8\_core\_data structure}.
+
+\item \textbf{Load and Relocate the Boot/CPU Driver}: Loading the \texttt{ELF} file for the CPU driver is similar to loading user-level processes. There are provided support functions, \texttt{load\_elf\_binary} and \texttt{relocate\_elf}, that handle \texttt{loading} and \texttt{relocation} and determine the \texttt{entry points} of the boot driver and the CPU driver. The boot driver's entry point for PSCI is called \texttt{boot\_entry\_psci}, and the physical address of this symbol is needed later. 
+
+\item \textbf{Fill in the armv8\_core\_data Structure}: We need to fill the fields in the \texttt{armv8\_core\_data} structure.Provide information such as the initial task (\texttt{monitor\_binary}), memory for the initial task, location of the URPC frame, kernel command line, virtual CPU driver entry point (\texttt{cpu\_driver\_entry}), stack for the CPU driver (\texttt{cpu\_driver\_stack}), and the correct \texttt{boot magic} (PSCI).
+
+\item \textbf{Clean the cache}: It is essential to ensure that the initialized data is visible to an uncached observer, which means that we need to perform \texttt{cache flushing}.
+
+During the cache cleaning process, any data that has been modified or written to the cache is synchronized and written back to the main memory. This ensures that the latest data is available and visible outside the cache, making it accessible to other components or observers that do not utilize the cache.
+
+By performing cache flushing, we guarantee \texttt{data coherence} and \texttt{consistency} between the cache and the main memory.
+
+\item \textbf{Invoke the Kernel Cap}: The last step involves invoking a specific operation on the kernel capability, utilizing a boot protocol defined by the hardware platform. In our case, we are using the \texttt{armv8 architecture}. This operation is responsible for initiating the boot driver, and consequently, the CPU driver, on the designated core.
+\end{itemize}
+
+The exact details of this boot algorithm depend on the specific \texttt{hardware architecture} being used. It outlines the necessary instructions and procedures to effectively start the boot driver, enabling the subsequent execution of the CPU driver on the targeted core.
+
+By invoking this operation, we trigger the necessary mechanisms for the boot process, ensuring that the boot driver and CPU driver are properly initiated.
+
+These steps are part of the process of booting a second core in an operating system using Coreboot.
+
+\section{Booting the second core - our implementation}
+
+Within this section, we will outline the sequential steps involved in the process of booting a second core. These steps provide a systematic approach to successfully initiate and integrate the additional core into the system's operation.
+
+To ensure clarity and facilitate understanding, each step will be thoroughly explained, ensuring that you have a complete understanding of the process from start to finish. By following these steps in the specified order, you can effectively enable the utilization of the second core, expanding the system's computational capabilities.
+
+Through this sequential breakdown, we aim to provide a clear overview of the tasks and considerations involved in booting a second core. 
+
+\subsection{Creation of the KCB}
+
+The process of creating the \texttt{Kernel Control Block} (KCB) operates as follows. First, we initiate a request for a specific amount of RAM (random-access memory) from the system. Ideally, this request should result in the allocation of a capability, granting access to the memory area. The size of this capability should match the predetermined size of \texttt{OBJSIZE\_KCB}, and it should adhere to the alignment requirements specified by \texttt{KCB\_ALIGNMENT}.
+
+With the allocated slot in place, we can proceed to retype the obtained \texttt{capability} into the corresponding type, which in this case is \texttt{ObjType\_KernelControlBlock}. This step involves transforming the general capability into a specific type that represents the \texttt{KCB}. By performing this retype operation, we establish a clear association between the allocated capability and its purpose as a \texttt{KCB}.
+
+The creation of the \texttt{KCB} involves requesting and obtaining a specific memory capability, allocating a slot for it, and subsequently retype it to the appropriate \texttt{ObjType\_KernelControlBlock} type. These steps ensure that the \texttt{KCB} is properly set up and ready to serve as the central structure holding the state and information necessary for a kernel instance within the operating system.
+
+\subsection{Load the bootloader, cpu driver}
+
+The process of loading the \texttt{bootloader} and the \texttt{cpu driver} required the execution of a series of steps in a methodical manner. Let's delve into these steps and their respective functions.
+
+Firstly, we initiate the process by locating the module using the \\texttt{load\_module\_into\_memory} function, which requires specifying the path to the desired module. This function enables us to identify and retrieve the module necessary for further processing.
+
+Once we have successfully located the module, the next step involves mapping it into the \texttt{virtual address space}. This mapping operation allows us to establish a connection between the module and the virtual memory layout of the system. By mapping the module into virtual space, we can gain direct access to its contents and perform subsequent operations on it.
+
+Having mapped the module in the virtual address space, we proceed to copy its contents into another frame. This involves duplicating the module's data and storing it in a separate frame of memory. This new frame, housing the copied module data, is also mapped into the \texttt{virtual address space}. Through this process, we acquire a capability that encapsulates the corresponding module.
+
+With the capability in hand, we can retrieve the entry point of the module. The entry point serves as the designated starting point for execution within the module's code. Subsequently, we load the \texttt{ELF binary} associated with the module, incorporating it into the system's memory.
+
+Finally, we proceed with the \texttt{relocation} of the \texttt{ELF binary}. Relocation involves adjusting memory addresses and \texttt{resolving symbol references} within the binary to align with the virtual memory layout. 
+
+\subsection{Load the monitor process}
+
+The process of loading a program bears significant resemblance to that of loading the \texttt{boot loader} and the \texttt{CPU driver}. However, there is a notable difference in that we are exclusively concerned with loading a binary image in the ELF format. As a result, we do not need to perform the \texttt{relocation} of the ELF at this particular stage of the process. Instead, the relocation step will be carried out later by the CPU driver.
+
+In this context, loading the program involves retrieving the binary image in ELF format and preparing it for execution. Unlike the boot loader and CPU driver, which require relocation to align memory addresses and resolve symbol references, the program being loaded does not undergo this relocation process immediately. This will be done in the cpu driver.
+
+\subsection{Allocate the core data structure and stack}
+
+At this stage of the process, we have gathered all the necessary components and resources required to populate the core data structure comprehensively. This allows us to provide crucial information and configurations for the proper functioning of the second core. Below is a list outlining the steps required to populate the core data structure.
+
+\begin{itemize}
+    \item Include the capability used for the CPU stack frame within the core data structure. This capability enables the second core to have access to the designated stack space for executing tasks and managing its own stack operations effectively.
+
+    \item Pass the command line arguments specifically intended for the \texttt{app\_main} function, which serves as the \texttt{entry point} in the C code for the second core. These arguments can provide essential parameters or instructions that are required for the proper execution of the core's tasks and functions.
+
+    \item Load the CPU memory frame, which encompasses the memory region specifically allocated for the second core's usage. By providing this information within the core data structure, we ensure that the core can efficiently manage and utilize its allocated memory resources.
+
+    \item Fill the monitor binary details within the core data structure. The monitor binary serves as an integral component in the system, responsible for overseeing the functioning of the core and facilitating coordination between different cores within the system.
+
+    \item Specify the base address of the \texttt{Kernel Control Block} block within the core data structure. The \texttt{KCB} block acts as a fundamental structure holding critical state and information for the kernel instance running on the second core.
+
+    \item Finally, minor but important operations are performed to ensure the completeness and accuracy of the core data structure. These operations may involve configuring various parameters or fields within the structure to ensure optimal integration of the second core into the system.
+    
+\end{itemize}
+
+\subsection{Flush the cache}
+
+Prior to writing any data to the second core, it is essential to perform a \texttt{cache flush} operation to ensure that the content of the core data structure is accurately visible to the other core. This cache flush procedure guarantees that any modifications or updates made to the core data structure are synchronized and reflected in the cache, making them accessible to other cores or components that rely on the cache for data retrieval.
+
+To accomplish this cache flushing process, we make use of two specific functions: \texttt{arm64\_dcache\_wb\_range} and \texttt{arm64\_idcache\_wbinv\_range}. These functions serve distinct purposes in the cache maintenance process.
+
+The \texttt{arm64\_dcache\_wb\_range} function is responsible for synchronizing the modified or written data in the data cache with the main memory, ensuring that the latest version of the data is stored in the memory. This ensures that any subsequent read operations from other cores or system components fetch the most up-to-date information.
+
+On the other hand, the \texttt{arm64\_idcache\_wbinv\_range} function is involved in the \texttt{invalidation} and \texttt{write-back} operations for the instruction cache. It ensures that any modifications made to the instruction cache are written back to the main memory and the cache is invalidated, ensuring that subsequent instruction fetches reflect the latest changes made to the core data structure.
+
+By invoking these cache maintenance functions, we guarantee cache coherence and ensure that the second core can accurately perceive and access the current state of the core data structure. This \texttt{synchronization} is crucial for booting the second core.
+
+\subsection{invoke\_monitor\_spawn\_core}
+
+Now, we reach the final stage of the process for booting a second core. At this point, we have successfully created all the necessary memory allocations required for the booting process. Additionally, \texttt{the armv8\_core\_data} structure has been filled with the accurate and appropriate values.
+
+With the allocated memory in place and the \texttt{armv8\_core\_data} structure properly configured, we have effectively laid the foundation for the successful booting of the second core. These preparations ensure that the core has access to the essential resources it needs to begin executing tasks and contributing to the overall operation of the system.
+
+At this stage, we are ready to execute the function \texttt{invoke\_monitor\_spawn\_core}, which plays a crucial role in the process of waking up the second core of the computer through a system call.
+
+By making this function call, we signal the operating system and the underlying firmware to take the necessary steps to awake the second core, allowing it to join the primary core in executing tasks and contributing to the overall computational capabilities of the system.
+
+\begin{lstlisting}[caption={Output of the first core},captionpos=b,frame=single,breaklines]
+kernel 1: ARMv8-A: Global data at 0xffff000040000000
+kernel 1: ARMv8-A: Kernel stack at 0xffff0000bc0ad000.. 0xffff0000bc0bd000
+kernel 1: ARMv8-A: Kernel first byte at 0xffff0000bc05e000
+kernel 1: ARMv8-A: Exception vectors (VBAR_EL1): 0xffff0000bc05e800
+kernel 1: GICv3: Enabling CPU interface
+kernel 1: GICv3: CPU interface enabled
+kernel 1: ARMv8-A: Enabling timers
+System counter frequency is 62500000Hz.
+Timeslice interrupt every 5000000 ticks (80ms).
+kernel 1: ARMv8-A: Setting coreboot spawn handler
+kernel 1: ARMv8-A: Calling arm_kernel_startup
+kernel 1: ARMv8-A: Doing non-BSP related bootup 
+kernel 1: ARMv8-A: Memory: bc0c2000, bc696000, size=5968 kB
+kernel 1: ARMv8-A: spawning 'armv8/sbin/init' on APP core
+kernel 1: ARMv8-A: spawn_init_common armv8/sbin/init
+spawn module: armv8/sbin/init
+kernel 1: init page tables: l0=0xffff0000bc3a0000, l1=0xffff0000bc3a1000, l2=0xffff0000bc3a2000, l3=0xffff0000bc3a3000
+kernel 1: ARMv8-A: creating monitor URPC frame cap
+\end{lstlisting}
+
+\subsection{Bootinfo setup}
+
+The last step for the second core to be operational is to copy the bootinfo, containing information on the different module available and capabilities of the hardware to the new core. The bootinfo includes two part: the memory region descriptions which can be sent by RPC to the new core and the memory capabilities. 
+
+Because (without considering the capabilities revisited milestone), it is not possible to send capabilities to another core, these needs to be forged, which is a process to create new capabilities (and as such is unsafe). This process is only used to create the bootinfo capabilities in the second core. These capabilities come as RAM, physical addresses or frames, and their capabilities have specific predetermined location to be in. We use the following code to handle all these cases:
+
+\begin{lstlisting}[caption={Forging bootinfo capabilities},captionpos=b,frame=single,breaklines]
+for(size_t i = 0; i < bi->regions_length; i++){
+    errval_t (*forge_function)(struct capref, genpaddr_t, gensize_t, coreid_t) = NULL;
+    struct capref* cap = NULL;
+    gensize_t map_size = bi->regions[i].mr_bytes;
+
+    switch (bi->regions[i].mr_type)
+    {
+    case RegionType_Empty:
+        forge_function = ram_forge;
+        cap = &mem_cap;
+        break;
+
+    case RegionType_PhyAddr:
+    case RegionType_PlatformData:
+        forge_function = physaddr_forge;
+        cap = &phys_cap;
+        break;
+
+    case RegionType_RootTask:
+        forge_function = frame_forge;
+        cap = &frame_cap;
+        break;
+
+    default:
+        break;
+    }
+
+    if(forge_function != NULL && cap != NULL){
+        map_size = ROUND_PAGE_UP(map_size);
+        err = forge_function(*cap, bi->regions[i].mr_base, map_size, disp_get_core_id());
+        if(err_is_fail(err))
+            return err;
+        cap->slot++;
+    }
+}
+\end{lstlisting}
+
+\section{Technical comments}
+
+\subsection{Difference between the \texttt{boot driver} and the \texttt{cpu driver}}
+
+The boot driver plays a crucial role in the system as the \texttt{final-stage bootloader} responsible for initializing the Memory \texttt{Management Unit (MMU)} for the CPU driver. It serves as a critical component that sets up the essential environment and conditions before \texttt{transferring control} to the CPU driver.
+
+In essence, the boot driver takes on the responsibility of configuring the system and establishing a stable and known state for the subsequent execution of the CPU driver. It performs various initialization tasks, such as setting up memory mappings, configuring hardware registers, and preparing the necessary data structures required for the CPU driver's operation.
+
+One of the primary functions of the boot driver is to ensure the proper setup of the MMU. The MMU is a hardware component responsible for virtual memory management, providing address translation and memory protection features. By configuring the MMU, the boot driver puts the \texttt{virtual address space} in a \texttt{known state}.
+
+Once all the critical data structures are established, and the overall system is in a \texttt{known and stable state}, the boot driver hands over control to the CPU driver. At this point, the CPU driver takes the lead and continues with the remaining tasks and operations required for the system's functionality.
+
+The transition from the boot driver to the CPU driver signifies a significant turning point in the system's execution. The CPU driver assumes responsibility for managing the core's execution, coordinating tasks, and executing the desired operations based on the established environment and data structures set up by the boot driver.
+
+In summary, the boot driver acts as the \texttt{final-stage bootloader}, responsible for configuring the MMU, setting up the system environment in a known state, and transferring control to the CPU driver. It ensures that all necessary data structures are prepared, and the system is in a known state before handing over control. The CPU driver then takes charge, carrying out the subsequent operations and tasks required for the system's overall functionality.
+
+\subsection{bsp\_main vs app\_main}
+
+\texttt{Barrelfish} employs a clear distinction between the \texttt{Bootstrap (BSP) processor} and the \texttt{Application (APP) processors}. This distinction becomes apparent during the boot process of the computing device.
+
+The \texttt{BSP} processor, also known as the bootstrap processor, holds a unique position as the \textbf{first processor to be booted} when the board is powered on. It serves as the initial point of entry into the system and plays a critical role in initializing the system's core components and establishing the foundational environment.
+
+In the C code of the \texttt{Barrelfish} operating system (at least in the given code for the course), the \texttt{bootstrap processor} follows a specific execution path defined by the \texttt{bsp\_main} function. This function contains the code that guides the \texttt{bootstrap processor} through the essential initialization steps, such as configuring hardware, setting up system resources, and establishing the fundamental framework required for subsequent operations.
+
+On the other hand, the \texttt{APP processors} refer to the additional processors or cores present in the system, apart from the bootstrap processor. When these \texttt{APP processors} are booted, they take on the role of application processors, focusing on executing application-specific tasks and functionalities. They won't execute the file system or the shell for example.
+
+In the C code structure, the \texttt{APP processors} follow a distinct execution path defined by the \texttt{app\_main} function. This function serves as the \texttt{entry point} for the \texttt{APP processors}, where the specific application-related operations and processes are executed.
+
+\subsection{Physical memory and virtual memory}
+
+Now, let's focus on the \texttt{memory model}, emphasizing the contrasting memory access modes utilized by the boot driver and the CPU driver. The boot driver plays a vital role in putting the system into a known state during the booting process. It operates exclusively in the realm of \texttt{physical addressing} since the MMU (Memory Management Unit) has not yet been set up. This implies that all operations must be conducted using \texttt{physical memory addresses}.
+
+Within the core data structure, an essential piece of information is the physical address indicating the starting point of the bootloader. The bootloader assumes the responsibility of configuring a minimal set of paging data structures exclusively dedicated to the CPU driver. During the booting process, the boot driver sets up the necessary minimal paging structures and activates the MMU, enabling the CPU driver to work seamlessly with \texttt{virtual memory}. These data structures lay the foundation for efficient \texttt{virtual memory management}, enabling the CPU driver to interact with the system using \texttt{virtual memory addresses}. It is important to note that the CPU driver exclusively operates within the \texttt{virtual memory domain}.
+
+This distinction highlights a critical difference between the CPU driver and the block driver. While the \textbf{CPU driver relies on virtual memory} for its operations, \textbf{the block driver can directly access and manipulate physical addresses}. This disparity arises due to the differing requirements and functionalities of these components within the system. On has to set the virtual address space in a known state and the second actually needs.
+
+\section{Retrospective}
+We decided to work on user-level message passing and multi-core support concurrently, to be able to integrate proper cross-core communication from the start, instead of having to switch to a different solution later. This worked quite well: Having the full suite of \texttt{aos\_rpc} functions available for initializing the other core streamlined the process considerably, as it already provided support for message fragmentation, callbacks, etc.

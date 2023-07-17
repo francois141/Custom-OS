@@ -1,0 +1,31 @@
+{
+    "title" : "URPC Tests (M6)",
+    "tests" : {
+        "U1" : {
+            "title" :  "URPC: Cross-Core Spawn",
+            "logfile" : "m6_log.log",
+            "base_modules" : true,
+            "modules" : [
+                [ "armv8/sbin/init", "t:m6:u1" ],
+                [ "armv8/sbin/alloc" ]
+            ],
+            "teststeps" : [
+                {
+                    "action" : "expect",
+                    "pass" : ["<grading> # TESTS: Milestone 6 \\(URPC\\)"],
+                    "fail" : [ ]
+                },
+                {
+                    "repeat": 4,
+                    "action" : "expect",
+                    "pass" : [
+                        "<grading> alloc running on core 1",
+                        "<grading> alloc running on core 0"
+                    ],
+                    "fail" : [ ]
+                }
+            ],
+            "timeout" : 30
+        }
+    }
+}

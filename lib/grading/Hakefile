@@ -1,0 +1,47 @@
+--------------------------------------------------------------------------
+-- Copyright (c) 2016 ETH Zurich.
+-- All rights reserved.
+--
+-- This file is distributed under the terms in the attached LICENSE file.
+-- If you do not find this file, copies can be found by writing to:
+-- ETH Zurich D-INFK, Universitaetstr. 6, CH-8092 Zurich. Attn: Systems Group.
+--
+-- Hakefile for /lib/grading
+--
+--------------------------------------------------------------------------
+
+[
+  build library {
+    target = "grading",
+    cFiles = [
+        "tests/test_m1.c",
+        "tests/test_m2.c",
+        "tests/test_m3.c",
+        "tests/test_m4.c",
+        "tests/test_m5.c",
+        "tests/test_m6.c",
+        "options.c",
+        "io.c",
+        "state.c",
+        "rpc.c",
+        "utils.c",
+        "grading.c"
+    ],
+    addIncludes = [
+      "include"
+    ],
+    addLibraries = [
+      "multiboot"
+    ]
+  },
+  build library {
+    target = "grading_support",
+    cFiles = [
+      "options.c",
+      "io.c"
+    ],
+    addIncludes = [
+      "include"
+    ]
+  }
+]

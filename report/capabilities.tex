@@ -1,0 +1,294 @@
+\chapter[Distributed Capabilities]{Distributed Capabilities \\ \Large \textnormal{Georgijs Vilums}}
+
+\label{chapter:distcap}
+
+Throughout all of the previous chapters, we have been working under one severe limitation: Capabilities cannot be transferred between cores. However, because capabilities are so fundamental to the functioning of Barrelfish, the system cannot be considered complete without complete support for the entire set of capability operations, both on a single core and on both cores at the same time.
+
+In this chapter, we will discuss the design decisions that went into designing our distributed capability system, the implementation hurdles we faced, how we integrated it with the system, and how we tested it.
+
+\section{Deleting and Revoking Capabilities on a Single Core}
+\label{section:distcap:dellocal}
+Before we dive right into the the core of the system, let us first consider the simpler cases where we want to revoke or delete the last copy of a capability that is located only on a single core. This operation is quite simple: Because our init process is single-threaded and non-blocking, we do not actually need to worry about concurrency. Instead, we simply execute the requested operation (\texttt{monitor\_revoke\_mark\_target} for a revoke request, or \texttt{monitor\_delete\_last} for a delete request). Then, a handler is registered on the delete stepping system to send a response to the original caller once all operations have been processed.
+
+\section{Sending Capabilities Across Cores}
+Listing \ref{listing:captransfer} shows the internal interface for transferring capabilities between cores. As mentioned in section \ref{section:rpc:async}, this interface is rarely used directly, and is instead mostly an implementation detail of the \texttt{async\_channel}.
+
+\begin{lstlisting}[caption={Internal interface for cross-core capability tranfers},label={listing:captransfer}]
+struct cap_transfer {
+    struct capability cap;
+    coreid_t          owner;
+    uint8_t           relations;
+    bool valid;
+};
+
+errval_t cap_transfer_copy(struct capref cap, struct cap_transfer *transfer);
+errval_t cap_transfer_move(struct capref cap, struct cap_transfer *transfer);
+
+errval_t cap_from_transfer(struct cap_transfer *transfer, struct capref cap);
+bool     cap_transfer_is_valid(struct cap_transfer *transfer);
+\end{lstlisting}
+
+\texttt{cap\_transfer\_move} and \texttt{cap\_transfer\_copy} are used to package a capability into a \texttt{struct cap\_transfer}, which can then be sent to another core. These functions both follow the same pattern:
+\begin{enumerate}
+    \item Populate the \texttt{cap} field with the help of \texttt{monitor\_cap\_identify}
+    \item Obtain the local relations of the capability. These will become the remote relations of the capability on the other core.
+    \item Set the owner. When copying, the owner remains unchanged. When moving, if there are no more local copies, the owner is set to the other core. 
+    \item Update the remote relations of the capability on this core by setting the remote copy bit.
+    \item If moving, nullify the capability on this core.
+\end{enumerate}
+
+Receiving the capability on the other core simply consists of using \texttt{monitor\_cap\_create} to create the capability, followed by setting the remote relations to the provided value.
+
+As mentioned at the beginning of this section, the interface for sending capabilities between cores is mostly an implementation detail of the \texttt{async\_channel}. In fact, the only requests that use the raw interface are those made at the very beginning of system initialization, when the second core is being booted. After that point, all capability transfers are handled by the async channel: Capabilities are automatically serialized on the sending core, and re-created on the other core before the corresponding handler function runs.
+
+This interface not only exists as a convenience factor, but also guarantees the correct operation of the distributed capability system. As an example, consider a situation where core 0 sends a request to core 1 containing a capability, and subsequently issues a revocation request for the capability contained in the request. If, for example, the request handler handling the initial request suspends before initializing the capability on the remote core, the revocation request may attempt to revoke a capability which does not (yet) exist. The capability would essentially evade revocation while in a serialized form.
+
+Handling the sending and receiving of capabilities on the level of the async channel ensures that all requests dealing with capabilities are processes exactly in the order in which they are issued, preventing the above situation from ocurring.
+
+\section{Synchronizing Capabilty Operations}
+\label{section:cap:sync}
+When remote copies or descendants of a capability exist, synchronization is required to ensure that the state stays consistent. In princpile, this procedure always consists of the same steps:
+\begin{enumerate}
+    \item Lock the target capability. If it is already locked, wait until it is unlocked and retry.
+    \item Send a synchronization request to the other core containing details about the original request.
+    \item (On the other core) Perform the synchronization actions, and send a response to the original core.
+    \item Unlock the target capability.
+    \item Perform the requested operation.
+\end{enumerate}
+
+One communication round trip is sufficient because our system only utilizes two cores. This obviates the need for a two-phase commit, as the core receiving the synchronization message can immediately decide if the operation can be performed and perform it, without having to notify the original core in-between. This would not be possible with three or more cores, as neither of the remote cores could unilaterally decide to execute the operation without receiving a confirmation from the other cores.
+
+\subsection{Suspensions}
+As discussed in chapter \ref{chapter:mp}, in our design, the init process is single-threaded and completely asynchronous. This introduces some additional complications for the synchronizing capability operations: In contrast to other operations, which need to suspend at most once (for example, a \texttt{wait} operation only needs to suspend once and resumes once the target process exits), all of the synchronizing capability operations may need to suspend and resume at multiple points during the process (and potentially even multiple times at a single point). Because the call stack is not preserved across suspensions, all of the state necessary to process a request through its lifetime must be stored in a heap-allocated structure. An example for the delete operation (discussed later) is shown in listing \ref{listing:delsuspend}:
+
+\begin{lstlisting}[caption={State preserved across suspension points in the delete handler},label={listing:delsuspend}]
+struct delete_suspend {
+    struct aos_rpc_handler_data rpc_data;
+    struct delete_sync          sync;
+    struct domcapref            cap;
+    struct delete_queue_node    qn;
+};
+\end{lstlisting}
+
+The structure contains various elements:
+\begin{enumerate}
+    \item The \texttt{aos\_rpc\_handler\_data} containing the state of the request, required for sending the response after the operation finishes.
+    \item A \texttt{delete\_sync} object, which is sent to the other core for synchronization (discussed later).
+    \item A reference to the capability being delete.
+    \item The queue node for waiting for the delete stepping framework.
+\end{enumerate}
+Similar structures exist for revocations and retype operations.
+
+\subsection{Waiting for a Lock}
+All of the synchronizing capability operations lock the capability before performing any remote synchronization. Because a capability may already be locked when a request arrives and init must be nonblocking, it may be necessary to suspend until the capability is unlocked. This is achieved through using the provided facilities for waiting on a locked capability (\texttt{caplock\_wait}), and performing notifying unlocks. Listing \ref{listing:deletelock} shows this process for the \texttt{delete} operation. It first attempts to lock the capability. If the capability is locked, a callback to the \textit{same function} is registered, to be executed once the capability is unlocked. Notice that by the time the callback is executed, the capability may have been locked again. Hence, this function may suspend an arbitrary number of times at the same point (although this is highly unlikely).
+
+Once the lock on the capability has been acquired, the cross-core synchronization process begins.
+
+\begin{lstlisting}[caption={Waiting for a lock before beginning the capability deletion process},label={listing:deletelock}]
+static void delete_step_1(void* arg) {
+    struct delete_suspend *suspend = arg;
+    errval_t err = monitor_domcap_lock_cap(suspend->cap);
+    if (err_no(err) == SYS_ERR_CAP_LOCKED) {
+        caplock_wait(suspend->cap, &suspend->qn.qn, MKCLOSURE(delete_step_1, suspend));
+    } else if(err_is_ok(err)) {
+        /* continue with cross-core sync */
+    } else {
+        USER_PANIC_ERR(err, "monitor_domcap_lock_cap");
+    }
+}
+\end{lstlisting}
+
+\subsection{Remote Delete}
+The first operation with remote synchronization which we will consider is the deletion of the last copy of a capability when remote copies exist. The procedure is very similar to the general process described at the beginning of this section. There are three cases which need to be handled:
+\begin{enumerate}
+    \item The current core is the owner, and the capability is moveable. In this case, ownership is transferred to the other core.
+    \item The current core is the owner, and the capability is not moveable. This means that all remote copies need to be deleted.
+    \item The other core is the owner. We only need to message it to update its remote relations for the capability being delete (i.e. unset the remote copy bit).
+\end{enumerate}
+The correct case is chosen based on the results of \texttt{monitor\_get\_domcap\_owner} and \texttt{distcap\_is\_moveable}. Based on this, the structure shown in listing \ref{listing:deletesync} is populated and sent to the other core through an asynchronous request.
+
+\begin{lstlisting}[caption={Synchronization message for the delete operation},label={listing:deletesync}]
+struct delete_sync {
+    struct aos_distcap_base_request base;
+    struct capability               cap;
+    uint8_t                         owner;
+    enum {
+        DELETE_SYNC_MOVE_OWNER,
+        DELETE_SYNC_DELETE_FOREIGNS,
+        DELETE_SYNC_LAST_NONOWNER,
+    } op;
+};
+\end{lstlisting}
+
+Upon receiving this message, the other core needs perform an operation depending on the \texttt{op} specified in the message. The process is illustrated in in listing \ref{listing:deletesyncremote}\footnote{The listing is simplified to make it more readable.}: First, a temporary copy of the target capability is created, to create a target on which the capability operations can be executed on. Next, depending on the \texttt{op} field, one of three operations is performed, as described at the beginning of this section:
+\begin{enumerate}
+    \item To move ownership to this core, \texttt{monitor\_set\_cap\_owner} is used.
+    \item All foreign copies are deleted using \texttt{monitor\_delete\_foreign}.
+    \item The remote copy bit is unset using \texttt{monitor\_remote\_relations}.
+\end{enumerate}
+After the operation is executed, the temporary copy of the capability is nullified. It is only an artifact of implementing the necessary operations, and must not remain on the core.
+
+\begin{lstlisting}[caption={Case distinction for delete synchronization operation},label={listing:deletesyncremote}]
+
+monitor_cap_create(tempcap, &sync->cap, owner);
+if (sync->op == DELETE_SYNC_MOVE_OWNER) {
+    // set the owner of the cap to this core
+    monitor_set_cap_owner(cap_root, get_cap_addr(tempcap), 
+        get_cap_level(tempcap), disp_get_core_id());
+} else if (sync->op == DELETE_SYNC_DELETE_FOREIGNS) {
+    // delete all copies of the cap on this core
+    monitor_delete_foreigns(tempcap);
+} else if (sync->op == DELETE_SYNC_LAST_NONOWNER) {
+    // unset RRELS_COPY_BIT
+    monitor_remote_relations(tempcap, 0, RRELS_COPY_BIT, NULL);
+} else {
+    USER_PANIC("Unknown delete sync operation");
+}
+monitor_nullify_cap(tempcap);
+\end{lstlisting}
+
+Finally, after the operations on the remote core are executed and the sending core receives a response, the final step of the operation can be executed, again depending on the \texttt{op} field. The process is shown in listing \ref{listing:deletefinal}. In the case of deleting the last copy of a capability when the other core is already the owner or could be made the owner, we simply nullify the local copy of the capability. No cleanup must be performed, because that will occur once the capability is deleted on the other core. If, on the other hand, the capability could not be moved, we need to now delete the last local copy with the help of the delete stepping framework. At this point, no more remote copies exist, hence the process is the exact same as for deleting local capabilities, described in section \ref{section:distcap:dellocal}.
+
+\begin{lstlisting}[caption={Final step of synchronized delete},label={listing:deletefinal}]
+struct domcapref cap = suspend->cap;
+// we locked the cap before sending the remote request. unlock it now
+caplock_unlock(cap);
+if (suspend->sync.op == DELETE_SYNC_LAST_NONOWNER 
+    || suspend->sync.op == DELETE_SYNC_MOVE_OWNER) {
+    // Capability (now) lives on the other core. Nullify the remaining local copy
+    monitor_nullify_domcap(cap.croot, cap.cptr, cap.level);
+    // send the response to original caller
+    suspend->rpc_data.resume_fn.handler(suspend->rpc_data.resume_fn.arg);
+    free(suspend);
+} else if (suspend->sync.op == DELETE_SYNC_DELETE_FOREIGNS) {
+    // all foreign copies were deleted. now delete local copies and register response callback
+    delete_last(cap);
+    delete_queue_wait(&suspend->qn, MKCLOSURE(queue_delete_handler, suspend));
+} else {
+    USER_PANIC("invalid delete sync op");
+}
+\end{lstlisting}
+
+\subsection{Remote Revoke}
+Even though a capability revocation is a much more involved process than a simple deletion, the synchronization process is actually simpler, because there are less distinct cases to handle. Fundamentally, the same operation needs to happen on all cores: Mark all copies and descendants of the target capability, and then run the delete stepping framework until completion. The only reason why there even are multiple cases is because a different operation must be executed depending on whether the core is the owner of the target capability or not.
+
+Similarly to a remote deletion, the process begins by locking the capability and filling an instance of \texttt{struct revoke\_sync}, shown in listing \ref{listing:revokesync}, with relevant data about the target capability.
+
+\begin{lstlisting}[caption={Payload for revoke synchronization},label={listing:revokesync}]
+struct revoke_sync {
+    struct aos_distcap_base_request base;
+    capability_t                    cap;
+    uint8_t                         owner;
+};
+\end{lstlisting}
+
+After receiving the synchronization message, the remote core must execute one of two different marking operations, depending on whether it is the owner of the capability that is being revoked. If it isn't, \texttt{monitor\_revoke\_mark\_relations} can be used directly on the \texttt{struct capability} that was passed in the sync message. Otherwise, a temporary copy of the capability must be created and marked with \texttt{monitor\_revoke\_mark\_target}, and subsequently nullified. 
+
+After marking, the remote core waits for the delete queue to empty, and subsequently sends a response. Then, the core issuing the original request must perform the same procedure: If it is the owner of the capability, \texttt{monitor\_revoke\_mark\_target} is used (creating a temporary copy is not necessary, as the capability is already present on the requesting core). If the other core owns the capability, \texttt{monitor\_revoke\_mark\_relations} is used. After the delete queue empties, the response to the original request is sent.
+
+\subsection{Remote Retype}
+The remote retype is actually the simplest operation in terms of synchronization. The general flow is, again, very similar to the other operations: We first attempt to lock the capability (and if we can't, suspend until we can). Next, we check if we can perform the retype locally, as there is no need to synchronize if the operation is invalid anyway. 
+Next, a synchronization message (shown in listing \ref{listing:retypesync}) is sent to the other core. The other core checks the contents of this message to decide whether the retype operation should be allowed, using \texttt{monitor\_is\_retypeable}. If the check succeeds, it also immediately updates the remote relations of its local copy of the retyped capability to set the descendant bit\footnote{For this, it is necessary to create a temporary local copy}. This is important to ensure that a future revoke of the capability would also clean up children on the other core. Once the confirmation arrives from the other core, the retype is performed and a response is sent.
+
+\begin{lstlisting}[caption={Payload for retype synchronization},label={listing:retypesync}]
+struct retype_sync {
+    struct aos_distcap_base_request base;
+    capability_t                    cap;
+    uint8_t                         owner;
+    gensize_t                       offset;
+    gensize_t                       objsize;
+    size_t                          count;
+};
+\end{lstlisting}
+
+While implementing the remote retyping operation, we actually came across a bug in the kernel. As shown in listing \ref{listing:retypebug}, the system call arguments for the capability source pointer are mixed up, and the value of \texttt{offset} is passed as the address of \texttt{src}. As the kernel later accesses \texttt{src}, a kernel panic occurs.
+
+\begin{lstlisting}[caption={Bug in the invocation handler for \texttt{monitor\_is\_retypeable}},label={listing:retypebug}]
+INVOCATION_HANDLER(monitor_handle_is_retypeable)
+{
+    (void)kernel_cap;
+    INVOCATION_PRELUDE(5);
+    // check access to user pointer
+    if (!access_ok(
+        ACCESS_READ, sa->arg1, sizeof(struct capability))) {
+        return SYSRET(SYS_ERR_INVALID_USER_BUFFER);
+    }
+
+    struct capability *src = 
+        (struct capability *)sa->arg2; // should be sa->arg1
+
+    uintptr_t offset  = sa->arg2;
+    uintptr_t objsize = sa->arg3;
+    uintptr_t count   = sa->arg4;
+
+    return sys_monitor_is_retypeable(
+        src, offset, objsize, count);
+}
+\end{lstlisting}
+
+Furthermore, we also came across a bug in the provided \texttt{distops} implementation. Listing \ref{listing:retypebug2} shows the provided implementation of \texttt{monitor\_domcap\_retype\_remote\_cap}. It wrongly uses \texttt{get\_croot\_addr} instead of \texttt{get\_cap\_addr} to get the addresses of capabilities referring to the CSpace roots of the capabilities to be retyped. This leads to the wrong slots being looked up by the kernel and prevents the retype operation from functioning correctly.
+
+\begin{lstlisting}[caption={Bug in the invocation code for retyping a \texttt{domcap}},label={listing:retypebug2}]
+errval_t monitor_domcap_retype_remote_cap(
+    struct domcapref dest_start, 
+    struct domcapref src, 
+    gensize_t offset, 
+    enum objtype newtype, 
+    gensize_t objsize, 
+    gensize_t count, 
+    capaddr_t slot
+) {
+    return invoke_monitor_remote_cap_retype(
+        get_croot_addr(src.croot), // should be get_cap_addr
+        src.cptr, 
+        offset, 
+        newtype, 
+        objsize, 
+        count, 
+        get_croot_addr(dest_start.croot), // should be get_cap_addr
+        dest_start.cptr, 
+        slot, 
+        dest_start.level
+    );
+}
+\end{lstlisting}
+
+The fixes to both of these problems are deployed in our version of Barrelfish.
+
+\section{System Integration}
+As previously discussed, support for sending capabilities between cores is introduced completely transparently by the asynchronous channel between each core's init process. Hence, system integration is rather easy in most places: Operations can simply be forwarded between cores, and don't have to care whether they send any capabilities or not. In this section, we will discuss the most important operations enabled by the distributed capability system, as well as operations which could be enabled in the future.
+
+\subsection{Spawning with Capabilities}
+Spawning a process with capabilities on an arbitrary core is perhaps the most important feature that is enabled by the extended capability system. And, notably, no additional implementation was required to support this functionality: Because the capability transfer is fully integrated in the async channel, spawn requests can be forwarded to the other core in the same way as previously, only that now capabilities will also be sent along (previously, the async channel would simply drop any capabilities sent with a message).
+
+A feature which depends on this functionality is the ability to pipe data between processes on different cores: As discussed in chapter \ref{chapter:shell}, data piping is supported through a UMP frame shared between the piped processes. If the processes reside on different cores, the frame must be sent between cores to enable the piping.
+
+\subsection{Single Memory Server}
+We implement a simple form of using a single memory server: All memory requests originating from user processes running on the second core are forwarded to the main core. The mechanism through which this is achieved is completely analogous to the extended support for spawning remote processes with capabilities: The capability is simply sent along in the async channel.
+
+A notable limitation is that this only applies to user processes: The init process still uses its statically assigned memory pool to allocate memory. This is because allocating memory from the other core requires suspending (as init is non-blocking and the other core may take arbitrarily long to serve the request), and, due to the lack of language support, it would be infeasible to incorporate suspension into all places where memory is allocated in init.
+
+\section{Testing}
+We test our distributed capability system with a user process called \texttt{tester}. The tester executes various capability operations and verifies that the correct results are obtained.
+
+The most basic tests are only run in the main process. They test for the correct operation of the delete stepping framework, by creating a capability with local copies, and then deleting and/or revoking it. Then, by using \texttt{cap\_direct\_identify}, we verify that the target capabilities have indeed been deleted.
+
+A set of more complex tests verifies cross-core operations. For this, we set up a set of capabilities, and then spawn the same \texttt{tester} process on the other core, sending along the capabilities we just created. We will refer to the spawning process as the parent, and to the spawned process as the child). First, the child executes the same single-process tests that the parent goes through. Then, the parent and the child perform a set of operations on their shared capabilities:
+\begin{itemize}
+    \item Delete a frame from the parent. The frame should remaing accessible at the child, as ownership is moved.
+    \item Delete an L2 CNode from the parent. The child should not be able to access the CNode anymore, as ownership of CNodes cannot be moved.
+    \item Revoke a frame from the child. The frame should become inaccessible on both the child and the parent.
+    \item Revoke a RAM capability from the child, where the RAM capability has a descendant frame on the parent core. The descendant should be deleted.
+    \item Retype a RAM capability from the child, where an overlapping descendant exists on the parent. This should fail.
+    \item Retype a RAM capability from the child, without any overlaps. This should succeed.
+\end{itemize}
+If all of these operations succeed, the tests are considered a success.
+
+\section{Retrospective}
+Our decision to make the init process fully asynchronous and definitely had a big impact on how the distributed capability system had to be designed. Because some of the operations need to suspend multiple times, state management becomes convoluted and hard to follow. 
+
+It also significantly complicates the process of performing potentially blocking capability operations from within init. A \texttt{cap\_delete} may block the process, and so would require a suspension if used from within init. However, introducing suspensions throughout the code in init would be infeasible, and hence these operations are simply not supported.
+
+If our design instead used threads to handle incoming requests, blocking would not be an issue, and the process of waiting for a lock, sending a request, waiting for a response, and sending the response to the original request could happen from within a single function invocation.
+
+As mentioned in prior sections, better language-level support for asynchronous programming would also be a solution.
